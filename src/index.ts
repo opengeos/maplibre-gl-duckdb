@@ -1,18 +1,23 @@
-// Import styles
 import './lib/styles/plugin-control.css';
 
-// Main entry point - Core exports
-export { PluginControl } from './lib/core/PluginControl';
+export { DuckDBControl, PluginControl } from './lib/core/DuckDBControl';
 
-// Type exports
 export type {
-  PluginControlOptions,
-  PluginState,
+  DuckDBColumn,
+  DuckDBControlEvent,
+  DuckDBControlEventHandler,
+  DuckDBControlOptions,
+  DuckDBFeatureSelection,
+  DuckDBGeometryFormat,
+  DuckDBLayerState,
+  DuckDBState,
+  DuckDBTable,
   PluginControlEvent,
   PluginControlEventHandler,
+  PluginControlOptions,
+  PluginState,
 } from './lib/core/types';
 
-// Utility exports
 export {
   clamp,
   formatNumericValue,
@@ -21,3 +26,17 @@ export {
   throttle,
   classNames,
 } from './lib/utils';
+
+export {
+  buildCountQuery,
+  buildResultQuery,
+  cleanSql,
+  detectGeometryColumn,
+  detectGeometryFormat,
+  escapeSource,
+  friendlyError,
+  quoteIdentifier,
+} from './lib/duckdb/utils';
+
+export { configureDuckDB } from './lib/duckdb/duckdb';
+export type { DuckDBSourceConfig } from './lib/duckdb/duckdb';

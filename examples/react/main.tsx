@@ -1,33 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import maplibregl, { Map } from 'maplibre-gl';
-import { PluginControlReact, usePluginState } from '../../src/react';
+import { DuckDBControlReact, useDuckDBState } from '../../src/react';
 import '../../src/index.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-/**
- * Main App component demonstrating the React integration
- */
 function App() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<Map | null>(null);
-  const { state, toggle } = usePluginState({ collapsed: false });
+  const { state, toggle } = useDuckDBState({ collapsed: false });
 
-  // Initialize the map
   useEffect(() => {
     if (!mapContainer.current) return;
 
     const mapInstance = new maplibregl.Map({
       container: mapContainer.current,
-      style: 'https://demotiles.maplibre.org/style.json',
-      center: [0, 0],
+      style: 'https://tiles.openfreemap.org/styles/positron',
+      center: [0, 20],
       zoom: 2,
     });
 
-    // Add navigation controls to top-right
     mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-    // Add fullscreen control to top-right (after navigation)
     mapInstance.addControl(new maplibregl.FullscreenControl(), 'top-right');
 
     mapInstance.on('load', () => {
@@ -39,15 +32,10 @@ function App() {
     };
   }, []);
 
-  const handleStateChange = (newState: typeof state) => {
-    console.log('Plugin state changed:', newState);
-  };
-
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
 
-      {/* External toggle button */}
       <button
         onClick={toggle}
         style={{
@@ -56,31 +44,40 @@ function App() {
           left: 10,
           zIndex: 1,
           padding: '8px 16px',
-          background: '#4a90d9',
+          background: '#287e9b',
           color: 'white',
           border: 'none',
           borderRadius: 4,
           cursor: 'pointer',
-          fontWeight: 500,
+          fontWeight: 600,
         }}
       >
-        {state.collapsed ? 'Expand' : 'Collapse'} Panel
+        {state.collapsed ? 'Expand' : 'Collapse'} DuckDB
       </button>
 
-      {/* Plugin control */}
       {map && (
-        <PluginControlReact
+        <DuckDBControlReact
           map={map}
-          title="React Plugin"
+          title="DuckDB"
           collapsed={state.collapsed}
-          panelWidth={320}
-          onStateChange={handleStateChange}
+          panelWidth={360}
+          databaseUrl="https://data.source.coop/giswqs/opengeos/nyc_data.db"
+          sampleDatabaseUrl="https://data.source.coop/giswqs/opengeos/nyc_data.db"
+          initialQuery={`SELECT BORONAME, NAME, ST_Transform(geom, 'EPSG:32618', 'EPSG:4326', true) AS geom
+FROM data.main.nyc_neighborhoods
+LIMIT 1000`}
+          geometryColumn="geom"
+          geometryFormat="auto"
+          sourceCrs="EPSG:32618"
+          layerName="DuckDB features"
+          onStateChange={(newState) => console.log('DuckDB state changed:', newState)}
+          onQuery={(newState) => console.log('DuckDB query rendered:', newState)}
+          onError={(error) => console.error('DuckDB control error:', error)}
         />
       )}
     </div>
   );
 }
 
-// Mount the app
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);

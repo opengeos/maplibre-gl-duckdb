@@ -1,14 +1,19 @@
-// React entry point
-export { PluginControlReact } from './lib/core/PluginControlReact';
+export { DuckDBControlReact, PluginControlReact } from './lib/core/DuckDBControlReact';
+export { useDuckDBState, usePluginState } from './lib/hooks';
 
-// React hooks
-export { usePluginState } from './lib/hooks';
-
-// Re-export types for React consumers
 export type {
-  PluginControlOptions,
-  PluginState,
-  PluginControlReactProps,
+  DuckDBControlEvent,
+  DuckDBControlEventHandler,
+  DuckDBControlOptions,
+  DuckDBControlReactProps,
+  DuckDBFeatureSelection,
+  DuckDBGeometryFormat,
+  DuckDBLayerState,
+  DuckDBState,
+  DuckDBTable,
   PluginControlEvent,
   PluginControlEventHandler,
+  PluginControlOptions,
+  PluginControlReactProps,
+  PluginState,
 } from './lib/core/types';

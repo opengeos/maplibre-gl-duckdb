@@ -1,4 +1,4 @@
-name: Deploy Examples to GitHub Pages
+name: Deploy DuckDB Examples to GitHub Pages
 
 on:
   push:

@@ -1,1 +1,1 @@
-export { usePluginState } from './usePluginState';
+export { useDuckDBState, usePluginState } from './useDuckDBState';
