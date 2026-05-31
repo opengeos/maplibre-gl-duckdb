@@ -1,47 +1,21 @@
 # Examples
 
-This directory contains example implementations of the MapLibre GL Plugin Template.
+This directory contains vanilla TypeScript and React examples for `maplibre-gl-duckdb`.
 
-## Available Examples
+Both examples show the same MapLibre control workflow:
 
-### Basic Example
-A simple vanilla JavaScript/TypeScript example showing how to add the plugin control to a map.
+- Load a local `.duckdb` or `.db` file.
+- Or enter a CORS-enabled remote DuckDB database URL.
+- Select a discovered table to populate the SQL editor.
+- Run SQL against the attached database schema alias `data`.
+- Render query results that include a `GEOMETRY`, WKB, or WKT column.
+
+The examples default to `https://data.source.coop/giswqs/opengeos/nyc_data.db`.
+They use `https://tiles.openfreemap.org/styles/positron` as the basemap.
+The NYC sample geometry is transformed from `EPSG:32618` to `EPSG:4326` in generated table queries.
+
+Run the examples locally with:
 
 ```bash
-# Run from project root
 npm run dev
-# Then navigate to http://localhost:5173/examples/basic/
 ```
-
-### React Example
-A React example demonstrating the React wrapper component and hooks.
-
-```bash
-# Run from project root
-npm run dev
-# Then navigate to http://localhost:5173/examples/react/
-```
-
-## Running Examples
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-3. Open your browser and navigate to the example you want to view.
-
-## Building Examples
-
-To build all examples for deployment:
-
-```bash
-npm run build:examples
-```
-
-The built examples will be in the `dist-examples` directory.

@@ -1,80 +1,119 @@
 import type { Map } from 'maplibre-gl';
 
-/**
- * Options for configuring the PluginControl
- */
-export interface PluginControlOptions {
-  /**
-   * Whether the control panel should start collapsed (showing only the toggle button)
-   * @default true
-   */
-  collapsed?: boolean;
+export type DuckDBControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type DuckDBGeometryFormat = 'auto' | 'geometry' | 'wkb' | 'wkt';
 
-  /**
-   * Position of the control on the map
-   * @default 'top-right'
-   */
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-
-  /**
-   * Title displayed in the control header
-   * @default 'Plugin Control'
-   */
-  title?: string;
-
-  /**
-   * Width of the control panel in pixels
-   * @default 300
-   */
-  panelWidth?: number;
-
-  /**
-   * Custom CSS class name for the control container
-   */
-  className?: string;
+export interface DuckDBColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
 }
 
-/**
- * Internal state of the plugin control
- */
-export interface PluginState {
-  /**
-   * Whether the control panel is currently collapsed
-   */
+export interface DuckDBTable {
+  databaseName: string;
+  schemaName: string;
+  tableName: string;
+  qualifiedName: string;
+  displayName: string;
+}
+
+export interface DuckDBFeatureSelection {
+  layerId: string;
+  layerName: string;
+  index: number;
+  properties: Record<string, unknown>;
+}
+
+export interface DuckDBLayerState {
+  id: string;
+  name: string;
+  beforeId: string | null;
+  query: string;
+  schema: DuckDBColumn[];
+  geometryColumn: string | null;
+  geometryFormat: Exclude<DuckDBGeometryFormat, 'auto'> | null;
+  totalRows: number;
+  loadedRows: number;
+}
+
+export interface DuckDBState {
   collapsed: boolean;
-
-  /**
-   * Current panel width in pixels
-   */
   panelWidth: number;
-
-  /**
-   * Any custom state data
-   */
-  data?: Record<string, unknown>;
+  databaseSource: string | null;
+  displaySource: string;
+  tables: DuckDBTable[];
+  selectedTable: string | null;
+  tableColumns: DuckDBColumn[];
+  query: string;
+  schema: DuckDBColumn[];
+  geometryColumn: string | null;
+  geometryFormat: DuckDBGeometryFormat;
+  resolvedGeometryFormat: Exclude<DuckDBGeometryFormat, 'auto'> | null;
+  pageSize: number;
+  totalRows: number;
+  loadedRows: number;
+  layer: DuckDBLayerState | null;
+  loading: boolean;
+  statusMessage: string;
+  error: string | null;
+  selectedFeature: DuckDBFeatureSelection | null;
+  pickable: boolean;
 }
 
-/**
- * Props for the React wrapper component
- */
-export interface PluginControlReactProps extends PluginControlOptions {
-  /**
-   * MapLibre GL map instance
-   */
+export interface DuckDBControlOptions {
+  collapsed?: boolean;
+  position?: DuckDBControlPosition;
+  title?: string;
+  panelWidth?: number;
+  className?: string;
+  databaseUrl?: string;
+  sampleDatabaseUrl?: string;
+  initialQuery?: string;
+  geometryColumn?: string;
+  geometryFormat?: DuckDBGeometryFormat;
+  sourceCrs?: string;
+  targetCrs?: string;
+  pageSize?: number;
+  fitBoundsOnLoad?: boolean;
+  allowLocalFiles?: boolean;
+  allowRemoteUrls?: boolean;
+  pickable?: boolean;
+  layerName?: string;
+  beforeId?: string;
+  interleaved?: boolean;
+}
+
+export interface DuckDBControlReactProps extends DuckDBControlOptions {
   map: Map;
-
-  /**
-   * Callback fired when the control state changes
-   */
-  onStateChange?: (state: PluginState) => void;
+  onStateChange?: (state: DuckDBState) => void;
+  onLoad?: (state: DuckDBState) => void;
+  onQuery?: (state: DuckDBState) => void;
+  onError?: (error: Error, state: DuckDBState) => void;
+  onSelect?: (selection: DuckDBFeatureSelection | null, state: DuckDBState) => void;
 }
 
-/**
- * Event types emitted by the plugin control
- */
-export type PluginControlEvent = 'collapse' | 'expand' | 'statechange';
+export type DuckDBControlEvent =
+  | 'collapse'
+  | 'expand'
+  | 'statechange'
+  | 'loadstart'
+  | 'progress'
+  | 'load'
+  | 'query'
+  | 'error'
+  | 'select';
 
-/**
- * Event handler function type
- */
-export type PluginControlEventHandler = (event: { type: PluginControlEvent; state: PluginState }) => void;
+export interface DuckDBControlEventData {
+  type: DuckDBControlEvent;
+  state: DuckDBState;
+  error?: Error;
+  selection?: DuckDBFeatureSelection | null;
+}
+
+export type DuckDBControlEventHandler = (event: DuckDBControlEventData) => void;
+
+export type PluginControlOptions = DuckDBControlOptions;
+export type PluginState = DuckDBState;
+export type PluginControlReactProps = DuckDBControlReactProps;
+export type PluginControlEvent = DuckDBControlEvent;
+export type PluginControlEventHandler = DuckDBControlEventHandler;

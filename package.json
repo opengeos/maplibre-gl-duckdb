@@ -1,7 +1,7 @@
 {
-  "name": "maplibre-gl-plugin-template",
-  "version": "0.2.2",
-  "description": "A template for creating MapLibre GL JS plugins with TypeScript and React support",
+  "name": "maplibre-gl-duckdb",
+  "version": "0.1.0",
+  "description": "A MapLibre GL JS control for querying and visualizing geospatial data from DuckDB databases",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -27,7 +27,7 @@
         "default": "./dist/react.cjs"
       }
     },
-    "./style.css": "./dist/maplibre-gl-plugin-template.css"
+    "./style.css": "./dist/maplibre-gl-duckdb.css"
   },
   "files": [
     "dist",
@@ -53,16 +53,34 @@
     "maplibre",
     "maplibre-gl",
     "map",
+    "duckdb",
+    "duckdb-wasm",
+    "spatial",
+    "geospatial",
+    "geoarrow",
+    "deck.gl",
     "plugin",
     "control",
     "react",
     "typescript"
   ],
-  "author": "Your Name",
+  "author": "Qiusheng Wu",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/maplibre-gl-plugin-template.git"
+    "url": "https://github.com/opengeos/maplibre-gl-duckdb.git"
+  },
+  "dependencies": {
+    "@deck.gl/aggregation-layers": ">=9.3.2",
+    "@deck.gl/core": ">=9.3.2",
+    "@deck.gl/geo-layers": ">=9.3.2",
+    "@deck.gl/layers": ">=9.3.2",
+    "@deck.gl/mapbox": ">=9.3.2",
+    "@duckdb/duckdb-wasm": ">=1.33.1-dev45.0",
+    "@geoarrow/deck.gl-geoarrow": ">=0.4.1",
+    "@math.gl/polygon": ">=4.1.0",
+    "@walkthru-earth/objex-utils": ">=1.5.0",
+    "apache-arrow": ">=21.1.0"
   },
   "peerDependencies": {
     "maplibre-gl": ">=3.0.0",
@@ -78,24 +96,24 @@
     }
   },
   "devDependencies": {
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.5.0",
-    "@types/node": "^22.0.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.18.0",
-    "@typescript-eslint/parser": "^8.18.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "@vitest/ui": "^2.1.0",
-    "eslint": "^9.17.0",
-    "jsdom": "^25.0.0",
-    "maplibre-gl": "^5.14.0",
-    "prettier": "^3.4.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "typescript": "^5.7.0",
-    "vite": "^6.0.0",
-    "vite-plugin-dts": "^4.3.0",
-    "vitest": "^2.1.0"
+    "@testing-library/react": ">=16.3.2",
+    "@testing-library/user-event": ">=14.6.1",
+    "@types/node": ">=25.9.1",
+    "@types/react": ">=19.2.15",
+    "@types/react-dom": ">=19.2.3",
+    "@typescript-eslint/eslint-plugin": ">=8.60.0",
+    "@typescript-eslint/parser": ">=8.60.0",
+    "@vitejs/plugin-react": ">=6.0.2",
+    "@vitest/ui": ">=4.1.7",
+    "eslint": ">=10.4.1",
+    "jsdom": ">=29.1.1",
+    "maplibre-gl": ">=5.24.0",
+    "prettier": ">=3.8.3",
+    "react": ">=19.2.6",
+    "react-dom": ">=19.2.6",
+    "typescript": ">=6.0.3",
+    "vite": ">=8.0.14",
+    "vite-plugin-dts": ">=5.0.1",
+    "vitest": ">=4.1.7"
   }
 }
