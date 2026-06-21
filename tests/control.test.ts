@@ -77,6 +77,38 @@ describe('DuckDBControl', () => {
     expect(control.getState().collapsed).toBe(true);
   });
 
+  it('renders no sample dropdown by default', () => {
+    const { map, mapContainer } = createMapStub();
+    const control = new DuckDBControl({ collapsed: false });
+    control.onAdd(map as never);
+    expect(mapContainer.querySelector('.duckdb-sample-menu')).toBeNull();
+  });
+
+  it('renders a sample dropdown that fills the URL input on selection', () => {
+    const { map, mapContainer } = createMapStub();
+    const control = new DuckDBControl({
+      collapsed: false,
+      sampleData: [
+        { label: 'NYC data', url: 'https://example.com/nyc.db' },
+        { label: 'World', url: 'https://example.com/world.db' },
+      ],
+    });
+    control.onAdd(map as never);
+
+    const trigger = mapContainer.querySelector('.duckdb-sample-trigger') as HTMLButtonElement;
+    expect(
+      trigger.querySelector('.duckdb-sample-trigger-label')?.textContent,
+    ).toBe('Load sample data...');
+    const urlInput = mapContainer.querySelector('.duckdb-control-url') as HTMLInputElement;
+    expect(urlInput.value).toBe('');
+
+    const options = [...mapContainer.querySelectorAll('.duckdb-sample-option')];
+    expect(options.map((o) => o.textContent)).toEqual(['NYC data', 'World']);
+
+    (options[1] as HTMLButtonElement).click();
+    expect(urlInput.value).toBe('https://example.com/world.db');
+  });
+
   it('emits expand and collapse events when toggled', () => {
     const { map } = createMapStub();
     const control = new DuckDBControl();

@@ -41,7 +41,7 @@ import type {
 const DEFAULT_OPTIONS: Required<
   Omit<
     DuckDBControlOptions,
-    'databaseUrl' | 'sampleDatabaseUrl' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
+    'databaseUrl' | 'sampleDatabaseUrl' | 'sampleData' | 'sampleDataLabel' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
   >
 > = {
   collapsed: true,
@@ -84,12 +84,12 @@ export class DuckDBControl implements IControl {
   private options: Required<
     Omit<
       DuckDBControlOptions,
-      'databaseUrl' | 'sampleDatabaseUrl' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
+      'databaseUrl' | 'sampleDatabaseUrl' | 'sampleData' | 'sampleDataLabel' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
     >
   > &
     Pick<
       DuckDBControlOptions,
-      'databaseUrl' | 'sampleDatabaseUrl' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
+      'databaseUrl' | 'sampleDatabaseUrl' | 'sampleData' | 'sampleDataLabel' | 'initialQuery' | 'geometryColumn' | 'layerName' | 'beforeId' | 'sourceCrs' | 'targetCrs'
     >;
   private eventHandlers: EventHandlersMap = new globalThis.Map();
   private resizeHandler: (() => void) | null = null;
@@ -787,6 +787,10 @@ export class DuckDBControl implements IControl {
       });
       row.appendChild(input);
       row.appendChild(button);
+      const sampleDropdown = this.createSampleDropdown((url) => {
+        input.value = url;
+      });
+      if (sampleDropdown) section.appendChild(sampleDropdown);
       section.appendChild(label);
       section.appendChild(row);
     }
@@ -827,6 +831,86 @@ export class DuckDBControl implements IControl {
     }
 
     return section;
+  }
+
+  /**
+   * Builds the "Load sample data" dropdown: a custom (not native `<select>`)
+   * dropdown so the menu themes correctly in dark mode. Picking an entry calls
+   * `onSelect` with its URL. Returns null when no samples are configured.
+   */
+  private createSampleDropdown(onSelect: (url: string) => void): HTMLElement | null {
+    const samples = this.options.sampleData ?? [];
+    if (samples.length === 0) return null;
+    const placeholder = this.options.sampleDataLabel ?? 'Load sample data...';
+
+    const triggerLabel = document.createElement('span');
+    triggerLabel.className = 'duckdb-sample-trigger-label';
+    triggerLabel.textContent = placeholder;
+    const caret = document.createElement('span');
+    caret.className = 'duckdb-sample-caret';
+    caret.textContent = '▾';
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'duckdb-sample-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', placeholder);
+    trigger.appendChild(triggerLabel);
+    trigger.appendChild(caret);
+
+    const menu = document.createElement('div');
+    menu.className = 'duckdb-sample-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.hidden = true;
+
+    let menuOpen = false;
+    const setMenuOpen = (open: boolean): void => {
+      menuOpen = open;
+      menu.hidden = !open;
+      trigger.setAttribute('aria-expanded', String(open));
+      trigger.classList.toggle('open', open);
+      if (open) (menu.firstElementChild as HTMLElement | null)?.focus();
+    };
+
+    for (const sample of samples) {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'duckdb-sample-option';
+      option.setAttribute('role', 'option');
+      option.textContent = sample.label;
+      option.title = sample.url;
+      option.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setMenuOpen(false);
+        trigger.focus();
+        onSelect(sample.url);
+      });
+      menu.appendChild(option);
+    }
+
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setMenuOpen(!menuOpen);
+    });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'duckdb-control-label duckdb-sample-dropdown';
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+
+    // Close on Escape or when focus leaves the dropdown (no document listener).
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && menuOpen) {
+        setMenuOpen(false);
+        trigger.focus();
+      }
+    });
+    wrap.addEventListener('focusout', (e) => {
+      const next = (e as FocusEvent).relatedTarget as Node | null;
+      if (!next || !wrap.contains(next)) setMenuOpen(false);
+    });
+
+    return wrap;
   }
 
   private renderQuerySection(): HTMLElement {

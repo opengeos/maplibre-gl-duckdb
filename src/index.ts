@@ -7,6 +7,7 @@ export type {
   DuckDBControlEvent,
   DuckDBControlEventHandler,
   DuckDBControlOptions,
+  DuckDBSampleDataset,
   DuckDBFeatureSelection,
   DuckDBGeometryFormat,
   DuckDBLayerState,

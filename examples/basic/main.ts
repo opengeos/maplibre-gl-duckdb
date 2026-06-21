@@ -19,7 +19,11 @@ map.on('load', () => {
     collapsed: false,
     panelWidth: 360,
     databaseUrl: 'https://data.source.coop/giswqs/opengeos/nyc_data.db',
-    sampleDatabaseUrl: 'https://data.source.coop/giswqs/opengeos/nyc_data.db',
+    // Offer the sample as an opt-in "Load sample data" dropdown instead of
+    // prefilling the URL input.
+    sampleData: [
+      { label: 'NYC data', url: 'https://data.source.coop/giswqs/opengeos/nyc_data.db' },
+    ],
     initialQuery: `SELECT BORONAME, NAME, ST_Transform(geom, 'EPSG:32618', 'EPSG:4326', true) AS geom
 FROM data.main.nyc_neighborhoods
 LIMIT 1000`,
@@ -29,7 +33,7 @@ LIMIT 1000`,
     layerName: 'DuckDB features',
   });
 
-  map.addControl(duckdbControl, 'top-right');
+  map.addControl(duckdbControl, 'top-left');
 
   duckdbControl.on('query', (event) => {
     console.log('DuckDB query rendered:', event.state);
