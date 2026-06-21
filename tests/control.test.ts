@@ -280,4 +280,54 @@ describe('DuckDBControl', () => {
     expect(control.getState().query).toBe('');
     expect(control.getState().selectedTable).toBeNull();
   });
+
+  it('adds a corner resize handle anchored opposite the docking corner', () => {
+    const { map, mapContainer } = createMapStub();
+    const control = new DuckDBControl({ collapsed: false, position: 'top-right' });
+    const container = control.onAdd(map as never);
+    // Mount the button container so getControlPosition can read the corner.
+    const corner = document.createElement('div');
+    corner.className = 'maplibregl-ctrl-top-right';
+    corner.appendChild(container);
+    mapContainer.appendChild(corner);
+
+    const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
+    const handle = panel.querySelector<HTMLElement>('.duckdb-control-resize')!;
+    expect(handle).toBeTruthy();
+
+    // For a top-right control the inward corner is bottom-left of the panel.
+    control.expand();
+    expect(handle.style.left).toBe('0px');
+    expect(handle.style.bottom).toBe('0px');
+    expect(handle.style.cursor).toBe('nesw-resize');
+  });
+
+  it('re-applies a user-chosen panel size clamped to the available room', () => {
+    const { map, mapContainer } = createMapStub();
+    Object.defineProperty(mapContainer, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 800, left: 0, right: 1200, width: 1200, height: 800 }),
+    });
+    const control = new DuckDBControl({ collapsed: false, position: 'top-right' });
+    const container = control.onAdd(map as never);
+    const corner = document.createElement('div');
+    corner.className = 'maplibregl-ctrl-top-right';
+    corner.appendChild(container);
+    mapContainer.appendChild(corner);
+
+    const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
+    // A top-right panel anchors its right edge near x=1200; getBoundingClientRect
+    // is zeroed in jsdom, so the room available from the anchor to the left map
+    // edge is rect.right (0) minus the margin: the size is clamped to the floor.
+    Object.assign(control as unknown as { userPanelSize: { width: number; height: number } }, {
+      userPanelSize: { width: 999, height: 999 },
+    });
+    (control as unknown as { applyUserPanelSize: () => void }).applyUserPanelSize();
+
+    // maxWidth/maxHeight are released so the JS-driven width/height governs.
+    expect(panel.style.maxWidth).toBe('none');
+    expect(panel.style.maxHeight).toBe('none');
+    expect(panel.style.width).toMatch(/px$/);
+    expect(panel.style.height).toMatch(/px$/);
+  });
 });

@@ -48,7 +48,9 @@
   display: none;
   font-size: 12px;
   line-height: 1.4;
-  max-height: min(620px, calc(100% - 20px));
+  /* No fixed max-height: JS drives maxHeight from the room available between
+     the anchored corner and the opposite map edge. The panel sizes to its
+     content and the content area scrolls when it overflows. */
   max-width: min(460px, calc(100% - 20px));
   min-width: 300px;
   overflow: hidden;
@@ -58,13 +60,36 @@
 }
 
 .duckdb-control-panel.expanded {
-  display: block;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Engine-independent resize affordance (CSS `resize` is unreliable in
+   WebKitGTK). Placed at the panel's inward corner by addResizeHandle(). */
+.duckdb-control-resize {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  z-index: 5;
+  color: #9aa5b1;
+  opacity: 0.55;
+  touch-action: none;
+  background-image: repeating-linear-gradient(
+    135deg,
+    currentcolor 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.duckdb-control-resize:hover {
+  opacity: 0.9;
 }
 
 .duckdb-control-header {
   align-items: center;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
+  flex: 0 0 auto;
   font-weight: 600;
   gap: 10px;
   justify-content: space-between;
@@ -96,7 +121,8 @@
 }
 
 .duckdb-control-content {
-  max-height: 560px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 10px 12px 12px;
 }
