@@ -150,6 +150,9 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Reserve space for the scrollbar so it does not overlay the right edge of
+     the form fields when the content scrolls. */
+  scrollbar-gutter: stable;
   padding: 10px 12px 12px;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "maplibre-gl-duckdb",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A MapLibre GL JS control for querying and visualizing geospatial data from DuckDB databases",
   "type": "module",
   "main": "./dist/index.cjs",
