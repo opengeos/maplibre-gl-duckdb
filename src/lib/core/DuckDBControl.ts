@@ -881,7 +881,11 @@ export class DuckDBControl implements IControl {
     // anchor and the opposite map edge; the 160px floor keeps it usable when
     // the map is tiny, and overflow-y: auto then scrolls the content.
     const available = Math.max(160, mapRect.height - anchorOffset - edgeMargin);
-    this.panel.style.maxHeight = `min(80vh, 720px, ${available}px)`;
+    // Cap at the room actually available (and a hard 720px ceiling), not 80vh:
+    // an 80vh cap is smaller than the available room on common window sizes, so
+    // a panel that would otherwise fit was forced to scroll. The panel still
+    // sizes to its content and only scrolls when the content exceeds this cap.
+    this.panel.style.maxHeight = `min(720px, ${available}px)`;
     const availableWidth = Math.max(PANEL_MIN_WIDTH, mapRect.width - 2 * edgeMargin);
     this.panel.style.maxWidth = `${availableWidth}px`;
 
