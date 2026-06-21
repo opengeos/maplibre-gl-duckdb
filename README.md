@@ -131,6 +131,8 @@ function App() {
 | `panelWidth` | `number` | `360` | Panel width in pixels |
 | `databaseUrl` | `string` | | CORS-enabled remote DuckDB database URL |
 | `sampleDatabaseUrl` | `string` | | URL shown in the input without auto-loading |
+| `sampleData` | `DuckDBSampleDataset[]` | | Sample databases shown as a "Load sample data" dropdown above the URL input; picking one fills the input (hidden when empty) |
+| `sampleDataLabel` | `string` | `'Load sample data...'` | Placeholder shown in the sample-data dropdown |
 | `initialQuery` | `string` | sample query | SQL query to run after loading a database |
 | `geometryColumn` | `string` | auto-detected | Geometry, WKB, or WKT column |
 | `geometryFormat` | `'auto' \| 'geometry' \| 'wkb' \| 'wkt'` | `'auto'` | Geometry conversion mode |

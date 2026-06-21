@@ -60,6 +60,17 @@ export interface DuckDBState {
   pickable: boolean;
 }
 
+/**
+ * A named sample database offered as a one-click entry in the panel's
+ * "Load sample data" dropdown. Picking it fills the DuckDB URL input.
+ */
+export interface DuckDBSampleDataset {
+  /** Label shown in the dropdown (e.g. 'NYC data'). */
+  label: string;
+  /** Database URL filled into the input when this entry is picked. */
+  url: string;
+}
+
 export interface DuckDBControlOptions {
   collapsed?: boolean;
   position?: DuckDBControlPosition;
@@ -68,6 +79,17 @@ export interface DuckDBControlOptions {
   className?: string;
   databaseUrl?: string;
   sampleDatabaseUrl?: string;
+  /**
+   * Sample databases offered as a "Load sample data" dropdown above the URL
+   * input; picking one fills the input. Omit or leave empty to hide the
+   * dropdown, so the input stays clean for the user's own URLs.
+   */
+  sampleData?: DuckDBSampleDataset[];
+  /**
+   * Placeholder shown in the sample-data dropdown before a selection.
+   * @default 'Load sample data...'
+   */
+  sampleDataLabel?: string;
   initialQuery?: string;
   geometryColumn?: string;
   geometryFormat?: DuckDBGeometryFormat;
