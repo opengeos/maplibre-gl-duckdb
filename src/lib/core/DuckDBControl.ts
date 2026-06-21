@@ -58,6 +58,12 @@ const DEFAULT_OPTIONS: Required<
   interleaved: true,
 };
 
+/** Smallest user-resized panel footprint. */
+const PANEL_MIN_WIDTH = 260;
+const PANEL_MIN_HEIGHT = 180;
+/** Breathing room kept between a resized panel and the map edges. */
+const PANEL_EDGE_MARGIN = 12;
+
 type EventHandlersMap = globalThis.Map<DuckDBControlEvent, Set<DuckDBControlEventHandler>>;
 
 interface LoadedDuckDBLayer {
@@ -94,6 +100,14 @@ export class DuckDBControl implements IControl {
   private eventHandlers: EventHandlersMap = new globalThis.Map();
   private resizeHandler: (() => void) | null = null;
   private mapResizeHandler: (() => void) | null = null;
+  /**
+   * User-chosen panel size from the bottom-corner resize handles, reapplied
+   * by updatePanelPosition so repositioning keeps it. null means auto.
+   */
+  private userWidth: number | null = null;
+  private userHeight: number | null = null;
+  /** Active drag teardown, so onRemove can detach mid-resize. */
+  private resizeDragCleanup: (() => void) | null = null;
 
   private collapsed: boolean;
   private databaseSource: string | null = null;
@@ -154,6 +168,8 @@ export class DuckDBControl implements IControl {
   onRemove(): void {
     if (this.resizeHandler) window.removeEventListener('resize', this.resizeHandler);
     if (this.mapResizeHandler && this.map) this.map.off('resize', this.mapResizeHandler);
+    // Detach any in-flight resize drag listeners.
+    this.resizeDragCleanup?.();
 
     this.popup?.remove();
     this.renderer?.remove();
@@ -686,7 +702,114 @@ export class DuckDBControl implements IControl {
     header.appendChild(closeButton);
     panel.appendChild(header);
     panel.appendChild(content);
+    this.addResizeHandles(panel);
     return panel;
+  }
+
+  /**
+   * Adds drag handles in the panel's bottom-left and bottom-right corners.
+   * The panel is absolutely positioned, so a custom handle is used instead of
+   * CSS `resize` (which is unreliable in WebKitGTK). Pointer drags resize the
+   * panel and the chosen size is kept (in {@link userWidth}/{@link userHeight})
+   * so repositioning does not reset it.
+   *
+   * @param panel - The panel element to attach handles to.
+   */
+  private addResizeHandles(panel: HTMLElement): void {
+    for (const side of ['left', 'right'] as const) {
+      const handle = document.createElement('div');
+      handle.className = `duckdb-control-resize-handle duckdb-control-resize-${side}`;
+      handle.setAttribute('aria-hidden', 'true');
+      handle.addEventListener('pointerdown', (event) => this.beginResize(event, side, panel, handle));
+      panel.appendChild(handle);
+    }
+  }
+
+  /**
+   * Starts a pointer-driven resize from one of the bottom-corner handles.
+   *
+   * The panel is first frozen to explicit left/top pixels (clearing any
+   * right/bottom anchor) so the opposite edge stays put no matter which corner
+   * the control sits in. The right handle then grows the panel rightward, the
+   * left handle leftward; both grow it downward. Sizes are clamped to a
+   * sensible minimum and to the map container.
+   *
+   * @param event - The pointerdown event.
+   * @param side - Which corner handle started the drag.
+   * @param panel - The panel element being resized.
+   * @param handle - The handle element (for pointer capture).
+   */
+  private beginResize(event: PointerEvent, side: 'left' | 'right', panel: HTMLElement, handle: HTMLElement): void {
+    if (!this.mapContainer) return;
+    event.preventDefault();
+    // Keep the drag from bubbling to any document-level click handler.
+    event.stopPropagation();
+
+    const mapRect = this.mapContainer.getBoundingClientRect();
+    const rect = panel.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    const startLeft = rect.left - mapRect.left;
+    const startRight = rect.right;
+    const startTop = rect.top;
+
+    // Clamp the preferred minimums to what the map can actually hold, so a
+    // small map container never forces the panel past its edges.
+    const minWidth = Math.min(PANEL_MIN_WIDTH, Math.max(120, mapRect.width - 2 * PANEL_EDGE_MARGIN));
+    const minHeight = Math.min(PANEL_MIN_HEIGHT, Math.max(120, mapRect.height - 2 * PANEL_EDGE_MARGIN));
+
+    // Pin the panel to its current rect so the size grows from the dragged
+    // corner regardless of the original anchor, and drop the CSS max-size
+    // caps for the duration of the drag.
+    panel.style.left = `${startLeft}px`;
+    panel.style.top = `${startTop - mapRect.top}px`;
+    panel.style.right = '';
+    panel.style.bottom = '';
+    panel.style.maxWidth = 'none';
+    panel.style.maxHeight = 'none';
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      const maxHeight = Math.max(minHeight, mapRect.bottom - startTop - PANEL_EDGE_MARGIN);
+      const nextHeight = Math.max(minHeight, Math.min(startHeight + dy, maxHeight));
+
+      let nextWidth: number;
+      let nextLeft = startLeft;
+      if (side === 'right') {
+        const maxWidth = Math.max(minWidth, mapRect.right - rect.left - PANEL_EDGE_MARGIN);
+        nextWidth = Math.max(minWidth, Math.min(startWidth + dx, maxWidth));
+      } else {
+        const maxWidth = Math.max(minWidth, startRight - mapRect.left - PANEL_EDGE_MARGIN);
+        nextWidth = Math.max(minWidth, Math.min(startWidth - dx, maxWidth));
+        // Hold the right edge fixed while the left edge follows the drag.
+        nextLeft = startLeft + (startWidth - nextWidth);
+      }
+
+      panel.style.width = `${nextWidth}px`;
+      panel.style.height = `${nextHeight}px`;
+      panel.style.left = `${nextLeft}px`;
+      this.userWidth = nextWidth;
+      this.userHeight = nextHeight;
+    };
+
+    const cleanup = (): void => {
+      handle.releasePointerCapture?.(event.pointerId);
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', cleanup);
+      handle.removeEventListener('pointercancel', cleanup);
+      this.resizeDragCleanup = null;
+    };
+
+    handle.setPointerCapture?.(event.pointerId);
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', cleanup);
+    // Touch/pen drags can end with pointercancel instead of pointerup.
+    handle.addEventListener('pointercancel', cleanup);
+    this.resizeDragCleanup = cleanup;
   }
 
   private setupEventListeners(): void {
@@ -724,24 +847,52 @@ export class DuckDBControl implements IControl {
     const left = buttonRect.left - mapRect.left;
     const right = mapRect.right - buttonRect.right;
     const gap = 5;
+    const edgeMargin = 10; // Breathing room between the panel and the map edge
 
     this.panel.style.top = '';
     this.panel.style.bottom = '';
     this.panel.style.left = '';
     this.panel.style.right = '';
 
+    // Offset of the panel's anchored edge from the same edge of the map
+    // container (top edge for top-* positions, bottom edge for bottom-*).
+    const anchorOffset =
+      (position === 'top-left' || position === 'top-right' ? top : bottom) +
+      buttonRect.height +
+      gap;
+
     if (position === 'top-left') {
-      this.panel.style.top = `${top + buttonRect.height + gap}px`;
+      this.panel.style.top = `${anchorOffset}px`;
       this.panel.style.left = `${left}px`;
     } else if (position === 'top-right') {
-      this.panel.style.top = `${top + buttonRect.height + gap}px`;
+      this.panel.style.top = `${anchorOffset}px`;
       this.panel.style.right = `${right}px`;
     } else if (position === 'bottom-left') {
-      this.panel.style.bottom = `${bottom + buttonRect.height + gap}px`;
+      this.panel.style.bottom = `${anchorOffset}px`;
       this.panel.style.left = `${left}px`;
     } else {
-      this.panel.style.bottom = `${bottom + buttonRect.height + gap}px`;
+      this.panel.style.bottom = `${anchorOffset}px`;
       this.panel.style.right = `${right}px`;
+    }
+
+    // The stylesheet sizes the panel to its content, but it must not extend
+    // past the map container (maps commonly have overflow: hidden) before its
+    // own scrollbar engages. Cap the panel to the space left between the
+    // anchor and the opposite map edge; the 160px floor keeps it usable when
+    // the map is tiny, and overflow-y: auto then scrolls the content.
+    const available = Math.max(160, mapRect.height - anchorOffset - edgeMargin);
+    this.panel.style.maxHeight = `min(80vh, 720px, ${available}px)`;
+    const availableWidth = Math.max(PANEL_MIN_WIDTH, mapRect.width - 2 * edgeMargin);
+    this.panel.style.maxWidth = `${availableWidth}px`;
+
+    // Reapply a resize the user made, clamped to the current map size, so
+    // repositioning keeps their chosen dimensions instead of snapping back.
+    // The lower bound guards a tiny map where the available room goes negative.
+    if (this.userWidth !== null) {
+      this.panel.style.width = `${Math.max(PANEL_MIN_WIDTH, Math.min(this.userWidth, availableWidth))}px`;
+    }
+    if (this.userHeight !== null) {
+      this.panel.style.height = `${Math.max(PANEL_MIN_HEIGHT, Math.min(this.userHeight, available))}px`;
     }
   }
 

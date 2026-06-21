@@ -280,4 +280,91 @@ describe('DuckDBControl', () => {
     expect(control.getState().query).toBe('');
     expect(control.getState().selectedTable).toBeNull();
   });
+
+  it('adds bottom-left and bottom-right resize handles', () => {
+    const { map, mapContainer } = createMapStub();
+    const control = new DuckDBControl({ collapsed: false, position: 'top-right' });
+    const container = control.onAdd(map as never);
+    // Mount the button container so getControlPosition can read the corner.
+    const corner = document.createElement('div');
+    corner.className = 'maplibregl-ctrl-top-right';
+    corner.appendChild(container);
+    mapContainer.appendChild(corner);
+
+    const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
+    const handles = panel.querySelectorAll<HTMLElement>('.duckdb-control-resize-handle');
+    expect(handles).toHaveLength(2);
+    const left = panel.querySelector<HTMLElement>('.duckdb-control-resize-left');
+    const right = panel.querySelector<HTMLElement>('.duckdb-control-resize-right');
+    expect(left).toBeTruthy();
+    expect(right).toBeTruthy();
+  });
+
+  it('grows width rightward from the right handle and leftward from the left handle', () => {
+    const { map, mapContainer } = createMapStub();
+    Object.defineProperty(mapContainer, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 800, left: 0, right: 1200, width: 1200, height: 800 }),
+    });
+    const control = new DuckDBControl({ collapsed: false, position: 'top-right' });
+    const container = control.onAdd(map as never);
+    const corner = document.createElement('div');
+    corner.className = 'maplibregl-ctrl-top-right';
+    corner.appendChild(container);
+    mapContainer.appendChild(corner);
+
+    const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
+    // Place the panel at a known rect so the resize math is deterministic.
+    Object.defineProperty(panel, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 100, bottom: 400, left: 400, right: 700, width: 300, height: 300 }),
+    });
+
+    const beginResize = (
+      control as unknown as {
+        beginResize: (e: PointerEvent, side: 'left' | 'right', p: HTMLElement, h: HTMLElement) => void;
+      }
+    ).beginResize.bind(control);
+
+    const makeEvent = (clientX: number, clientY: number): PointerEvent =>
+      ({
+        clientX,
+        clientY,
+        pointerId: 1,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      }) as unknown as PointerEvent;
+
+    // Right handle: drag right by 80px, the left edge stays fixed and width grows.
+    const rightHandle = panel.querySelector<HTMLElement>('.duckdb-control-resize-right')!;
+    beginResize(makeEvent(700, 400), 'right', panel, rightHandle);
+    rightHandle.dispatchEvent(
+      Object.assign(new Event('pointermove'), { clientX: 780, clientY: 400, pointerId: 1 })
+    );
+    expect(panel.style.width).toBe('380px');
+    // Left edge unchanged (panel started at map-relative left 400).
+    expect(panel.style.left).toBe('400px');
+    rightHandle.dispatchEvent(
+      Object.assign(new Event('pointerup'), { clientX: 780, clientY: 400, pointerId: 1 })
+    );
+
+    // Left handle: drag left by 100px, the right edge stays fixed so the left
+    // edge moves and width grows.
+    const leftHandle = panel.querySelector<HTMLElement>('.duckdb-control-resize-left')!;
+    beginResize(makeEvent(400, 400), 'left', panel, leftHandle);
+    leftHandle.dispatchEvent(
+      Object.assign(new Event('pointermove'), { clientX: 300, clientY: 400, pointerId: 1 })
+    );
+    expect(panel.style.width).toBe('400px');
+    // Right edge held fixed: left moved from 400 to 300.
+    expect(panel.style.left).toBe('300px');
+    leftHandle.dispatchEvent(
+      Object.assign(new Event('pointerup'), { clientX: 300, clientY: 400, pointerId: 1 })
+    );
+
+    // Both drags persisted a user size; max caps are released during drag.
+    expect(panel.style.maxWidth).toBe('none');
+    expect(panel.style.maxHeight).toBe('none');
+    expect(panel.style.height).toMatch(/px$/);
+  });
 });
