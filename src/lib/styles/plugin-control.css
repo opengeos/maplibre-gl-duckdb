@@ -65,24 +65,50 @@
 }
 
 /* Engine-independent resize affordance (CSS `resize` is unreliable in
-   WebKitGTK). Placed at the panel's inward corner by addResizeHandle(). */
-.duckdb-control-resize {
+   WebKitGTK). Two handles, one in each bottom corner, added by
+   addResizeHandles(). */
+.duckdb-control-resize-handle {
   position: absolute;
+  bottom: 0;
   width: 16px;
   height: 16px;
   z-index: 5;
-  color: #9aa5b1;
-  opacity: 0.55;
   touch-action: none;
-  background-image: repeating-linear-gradient(
-    135deg,
-    currentcolor 0 1px,
-    transparent 1px 3px
-  );
 }
 
-.duckdb-control-resize:hover {
-  opacity: 0.9;
+.duckdb-control-resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-color: #9aa5b1;
+  border-style: solid;
+  opacity: 0.7;
+}
+
+.duckdb-control-resize-handle:hover::after {
+  opacity: 1;
+}
+
+.duckdb-control-resize-right {
+  right: 0;
+  cursor: nwse-resize;
+}
+
+.duckdb-control-resize-right::after {
+  right: 3px;
+  border-width: 0 2px 2px 0;
+}
+
+.duckdb-control-resize-left {
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.duckdb-control-resize-left::after {
+  left: 3px;
+  border-width: 0 0 2px 2px;
 }
 
 .duckdb-control-header {

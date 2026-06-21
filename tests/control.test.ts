@@ -281,7 +281,7 @@ describe('DuckDBControl', () => {
     expect(control.getState().selectedTable).toBeNull();
   });
 
-  it('adds a corner resize handle anchored opposite the docking corner', () => {
+  it('adds bottom-left and bottom-right resize handles', () => {
     const { map, mapContainer } = createMapStub();
     const control = new DuckDBControl({ collapsed: false, position: 'top-right' });
     const container = control.onAdd(map as never);
@@ -292,17 +292,15 @@ describe('DuckDBControl', () => {
     mapContainer.appendChild(corner);
 
     const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
-    const handle = panel.querySelector<HTMLElement>('.duckdb-control-resize')!;
-    expect(handle).toBeTruthy();
-
-    // For a top-right control the inward corner is bottom-left of the panel.
-    control.expand();
-    expect(handle.style.left).toBe('0px');
-    expect(handle.style.bottom).toBe('0px');
-    expect(handle.style.cursor).toBe('nesw-resize');
+    const handles = panel.querySelectorAll<HTMLElement>('.duckdb-control-resize-handle');
+    expect(handles).toHaveLength(2);
+    const left = panel.querySelector<HTMLElement>('.duckdb-control-resize-left');
+    const right = panel.querySelector<HTMLElement>('.duckdb-control-resize-right');
+    expect(left).toBeTruthy();
+    expect(right).toBeTruthy();
   });
 
-  it('re-applies a user-chosen panel size clamped to the available room', () => {
+  it('grows width rightward from the right handle and leftward from the left handle', () => {
     const { map, mapContainer } = createMapStub();
     Object.defineProperty(mapContainer, 'getBoundingClientRect', {
       configurable: true,
@@ -316,18 +314,57 @@ describe('DuckDBControl', () => {
     mapContainer.appendChild(corner);
 
     const panel = mapContainer.querySelector<HTMLElement>('.duckdb-control-panel')!;
-    // A top-right panel anchors its right edge near x=1200; getBoundingClientRect
-    // is zeroed in jsdom, so the room available from the anchor to the left map
-    // edge is rect.right (0) minus the margin: the size is clamped to the floor.
-    Object.assign(control as unknown as { userPanelSize: { width: number; height: number } }, {
-      userPanelSize: { width: 999, height: 999 },
+    // Place the panel at a known rect so the resize math is deterministic.
+    Object.defineProperty(panel, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 100, bottom: 400, left: 400, right: 700, width: 300, height: 300 }),
     });
-    (control as unknown as { applyUserPanelSize: () => void }).applyUserPanelSize();
 
-    // maxWidth/maxHeight are released so the JS-driven width/height governs.
+    const beginResize = (
+      control as unknown as {
+        beginResize: (e: PointerEvent, side: 'left' | 'right', p: HTMLElement, h: HTMLElement) => void;
+      }
+    ).beginResize.bind(control);
+
+    const makeEvent = (clientX: number, clientY: number): PointerEvent =>
+      ({
+        clientX,
+        clientY,
+        pointerId: 1,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      }) as unknown as PointerEvent;
+
+    // Right handle: drag right by 80px, the left edge stays fixed and width grows.
+    const rightHandle = panel.querySelector<HTMLElement>('.duckdb-control-resize-right')!;
+    beginResize(makeEvent(700, 400), 'right', panel, rightHandle);
+    rightHandle.dispatchEvent(
+      Object.assign(new Event('pointermove'), { clientX: 780, clientY: 400, pointerId: 1 })
+    );
+    expect(panel.style.width).toBe('380px');
+    // Left edge unchanged (panel started at map-relative left 400).
+    expect(panel.style.left).toBe('400px');
+    rightHandle.dispatchEvent(
+      Object.assign(new Event('pointerup'), { clientX: 780, clientY: 400, pointerId: 1 })
+    );
+
+    // Left handle: drag left by 100px, the right edge stays fixed so the left
+    // edge moves and width grows.
+    const leftHandle = panel.querySelector<HTMLElement>('.duckdb-control-resize-left')!;
+    beginResize(makeEvent(400, 400), 'left', panel, leftHandle);
+    leftHandle.dispatchEvent(
+      Object.assign(new Event('pointermove'), { clientX: 300, clientY: 400, pointerId: 1 })
+    );
+    expect(panel.style.width).toBe('400px');
+    // Right edge held fixed: left moved from 400 to 300.
+    expect(panel.style.left).toBe('300px');
+    leftHandle.dispatchEvent(
+      Object.assign(new Event('pointerup'), { clientX: 300, clientY: 400, pointerId: 1 })
+    );
+
+    // Both drags persisted a user size; max caps are released during drag.
     expect(panel.style.maxWidth).toBe('none');
     expect(panel.style.maxHeight).toBe('none');
-    expect(panel.style.width).toMatch(/px$/);
     expect(panel.style.height).toMatch(/px$/);
   });
 });

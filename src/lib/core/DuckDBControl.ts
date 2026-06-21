@@ -100,10 +100,14 @@ export class DuckDBControl implements IControl {
   private eventHandlers: EventHandlersMap = new globalThis.Map();
   private resizeHandler: (() => void) | null = null;
   private mapResizeHandler: (() => void) | null = null;
-  /** User-chosen panel size from the resize handle, re-applied on reposition. */
-  private userPanelSize: { width: number; height: number } | null = null;
-  /** Repositions the resize handle to the panel's inward corner. */
-  private placeResizeHandle: (() => void) | null = null;
+  /**
+   * User-chosen panel size from the bottom-corner resize handles, reapplied
+   * by updatePanelPosition so repositioning keeps it. null means auto.
+   */
+  private userWidth: number | null = null;
+  private userHeight: number | null = null;
+  /** Active drag teardown, so onRemove can detach mid-resize. */
+  private resizeDragCleanup: (() => void) | null = null;
 
   private collapsed: boolean;
   private databaseSource: string | null = null;
@@ -164,6 +168,8 @@ export class DuckDBControl implements IControl {
   onRemove(): void {
     if (this.resizeHandler) window.removeEventListener('resize', this.resizeHandler);
     if (this.mapResizeHandler && this.map) this.map.off('resize', this.mapResizeHandler);
+    // Detach any in-flight resize drag listeners.
+    this.resizeDragCleanup?.();
 
     this.popup?.remove();
     this.renderer?.remove();
@@ -696,131 +702,114 @@ export class DuckDBControl implements IControl {
     header.appendChild(closeButton);
     panel.appendChild(header);
     panel.appendChild(content);
-    this.addResizeHandle(panel);
+    this.addResizeHandles(panel);
     return panel;
   }
 
   /**
-   * Adds a drag handle that resizes the panel in both dimensions. The panel is
-   * absolutely positioned and anchored to its docking corner, so a custom
-   * handle is used instead of CSS `resize` (which is unreliable in WebKitGTK):
-   * it sits at the panel's inward corner and grows toward the map interior, in
-   * any corner. The anchored edges stay fixed; only width/height change.
+   * Adds drag handles in the panel's bottom-left and bottom-right corners.
+   * The panel is absolutely positioned, so a custom handle is used instead of
+   * CSS `resize` (which is unreliable in WebKitGTK). Pointer drags resize the
+   * panel and the chosen size is kept (in {@link userWidth}/{@link userHeight})
+   * so repositioning does not reset it.
    *
-   * @param panel - The panel element to make resizable.
+   * @param panel - The panel element to attach handles to.
    */
-  private addResizeHandle(panel: HTMLElement): void {
-    const handle = document.createElement('div');
-    handle.className = 'duckdb-control-resize';
-    handle.setAttribute('aria-hidden', 'true');
-    panel.appendChild(handle);
-
-    const placeHandle = (): void => {
-      const pos = this.getControlPosition();
-      const right = pos.endsWith('right');
-      const bottom = pos.startsWith('bottom');
-      handle.style.top = bottom ? '0' : 'auto';
-      handle.style.bottom = bottom ? 'auto' : '0';
-      handle.style.left = right ? '0' : 'auto';
-      handle.style.right = right ? 'auto' : '0';
-      handle.style.cursor = right === bottom ? 'nwse-resize' : 'nesw-resize';
-    };
-    placeHandle();
-    this.placeResizeHandle = placeHandle;
-
-    let right = false;
-    let bottom = false;
-    let startX = 0;
-    let startY = 0;
-    let startW = 0;
-    let startH = 0;
-    let maxW = Infinity;
-    let maxH = Infinity;
-
-    const onMove = (event: PointerEvent): void => {
-      const dx = event.clientX - startX;
-      const dy = event.clientY - startY;
-      const width = Math.min(
-        maxW,
-        Math.max(PANEL_MIN_WIDTH, right ? startW - dx : startW + dx)
-      );
-      const height = Math.min(
-        maxH,
-        Math.max(PANEL_MIN_HEIGHT, bottom ? startH - dy : startH + dy)
-      );
-      this.userPanelSize = { width, height };
-      this.applyUserPanelSize();
-    };
-    const onEnd = (event: PointerEvent): void => {
-      handle.releasePointerCapture?.(event.pointerId);
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onEnd);
-      handle.removeEventListener('pointercancel', onEnd);
-    };
-    handle.addEventListener('pointerdown', (event) => {
-      if (!this.panel || !this.mapContainer) return;
-      event.preventDefault();
-      event.stopPropagation();
-      placeHandle();
-      const pos = this.getControlPosition();
-      right = pos.endsWith('right');
-      bottom = pos.startsWith('bottom');
-      const mapRect = this.mapContainer.getBoundingClientRect();
-      const rect = this.panel.getBoundingClientRect();
-      startX = event.clientX;
-      startY = event.clientY;
-      startW = rect.width;
-      startH = rect.height;
-      // The anchored edge is fixed, so the room to grow is constant for the
-      // whole drag: from that edge to the opposite map edge, less a margin.
-      maxW =
-        (right ? rect.right - mapRect.left : mapRect.right - rect.left) -
-        PANEL_EDGE_MARGIN;
-      maxH =
-        (bottom ? rect.bottom - mapRect.top : mapRect.bottom - rect.top) -
-        PANEL_EDGE_MARGIN;
-      handle.setPointerCapture?.(event.pointerId);
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onEnd);
-      // Touch/pen drags can end with pointercancel instead of pointerup.
-      handle.addEventListener('pointercancel', onEnd);
-    });
+  private addResizeHandles(panel: HTMLElement): void {
+    for (const side of ['left', 'right'] as const) {
+      const handle = document.createElement('div');
+      handle.className = `duckdb-control-resize-handle duckdb-control-resize-${side}`;
+      handle.setAttribute('aria-hidden', 'true');
+      handle.addEventListener('pointerdown', (event) => this.beginResize(event, side, panel, handle));
+      panel.appendChild(handle);
+    }
   }
 
   /**
-   * Applies the user-chosen panel size, clamped to the room available from the
-   * panel's anchored corner to the opposite map edge. Re-run on reposition so
-   * the size survives expand / window-resize (which rewrite the panel's
-   * positioning) and stays within the map.
+   * Starts a pointer-driven resize from one of the bottom-corner handles.
+   *
+   * The panel is first frozen to explicit left/top pixels (clearing any
+   * right/bottom anchor) so the opposite edge stays put no matter which corner
+   * the control sits in. The right handle then grows the panel rightward, the
+   * left handle leftward; both grow it downward. Sizes are clamped to a
+   * sensible minimum and to the map container.
+   *
+   * @param event - The pointerdown event.
+   * @param side - Which corner handle started the drag.
+   * @param panel - The panel element being resized.
+   * @param handle - The handle element (for pointer capture).
    */
-  private applyUserPanelSize(): void {
-    if (!this.panel || !this.userPanelSize || !this.mapContainer) return;
+  private beginResize(event: PointerEvent, side: 'left' | 'right', panel: HTMLElement, handle: HTMLElement): void {
+    if (!this.mapContainer) return;
+    event.preventDefault();
+    // Keep the drag from bubbling to any document-level click handler.
+    event.stopPropagation();
+
     const mapRect = this.mapContainer.getBoundingClientRect();
-    const pos = this.getControlPosition();
-    const right = pos.endsWith('right');
-    const bottom = pos.startsWith('bottom');
-    const rect = this.panel.getBoundingClientRect();
-    const maxW =
-      (right ? rect.right - mapRect.left : mapRect.right - rect.left) -
-      PANEL_EDGE_MARGIN;
-    const maxH =
-      (bottom ? rect.bottom - mapRect.top : mapRect.bottom - rect.top) -
-      PANEL_EDGE_MARGIN;
-    // Cap to the room available even when that is below the minimum, so a
-    // small map / window can't force an overflowing panel after reposition.
-    const width = Math.min(
-      Math.max(PANEL_MIN_WIDTH, this.userPanelSize.width),
-      Math.max(0, maxW)
-    );
-    const height = Math.min(
-      Math.max(PANEL_MIN_HEIGHT, this.userPanelSize.height),
-      Math.max(0, maxH)
-    );
-    this.panel.style.boxSizing = 'border-box';
-    this.panel.style.maxWidth = 'none';
-    this.panel.style.maxHeight = 'none';
-    this.panel.style.width = `${width}px`;
-    this.panel.style.height = `${height}px`;
+    const rect = panel.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    const startLeft = rect.left - mapRect.left;
+    const startRight = rect.right;
+    const startTop = rect.top;
+
+    // Clamp the preferred minimums to what the map can actually hold, so a
+    // small map container never forces the panel past its edges.
+    const minWidth = Math.min(PANEL_MIN_WIDTH, Math.max(120, mapRect.width - 2 * PANEL_EDGE_MARGIN));
+    const minHeight = Math.min(PANEL_MIN_HEIGHT, Math.max(120, mapRect.height - 2 * PANEL_EDGE_MARGIN));
+
+    // Pin the panel to its current rect so the size grows from the dragged
+    // corner regardless of the original anchor, and drop the CSS max-size
+    // caps for the duration of the drag.
+    panel.style.left = `${startLeft}px`;
+    panel.style.top = `${startTop - mapRect.top}px`;
+    panel.style.right = '';
+    panel.style.bottom = '';
+    panel.style.maxWidth = 'none';
+    panel.style.maxHeight = 'none';
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      const maxHeight = Math.max(minHeight, mapRect.bottom - startTop - PANEL_EDGE_MARGIN);
+      const nextHeight = Math.max(minHeight, Math.min(startHeight + dy, maxHeight));
+
+      let nextWidth: number;
+      let nextLeft = startLeft;
+      if (side === 'right') {
+        const maxWidth = Math.max(minWidth, mapRect.right - rect.left - PANEL_EDGE_MARGIN);
+        nextWidth = Math.max(minWidth, Math.min(startWidth + dx, maxWidth));
+      } else {
+        const maxWidth = Math.max(minWidth, startRight - mapRect.left - PANEL_EDGE_MARGIN);
+        nextWidth = Math.max(minWidth, Math.min(startWidth - dx, maxWidth));
+        // Hold the right edge fixed while the left edge follows the drag.
+        nextLeft = startLeft + (startWidth - nextWidth);
+      }
+
+      panel.style.width = `${nextWidth}px`;
+      panel.style.height = `${nextHeight}px`;
+      panel.style.left = `${nextLeft}px`;
+      this.userWidth = nextWidth;
+      this.userHeight = nextHeight;
+    };
+
+    const cleanup = (): void => {
+      handle.releasePointerCapture?.(event.pointerId);
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', cleanup);
+      handle.removeEventListener('pointercancel', cleanup);
+      this.resizeDragCleanup = null;
+    };
+
+    handle.setPointerCapture?.(event.pointerId);
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', cleanup);
+    // Touch/pen drags can end with pointercancel instead of pointerup.
+    handle.addEventListener('pointercancel', cleanup);
+    this.resizeDragCleanup = cleanup;
   }
 
   private setupEventListeners(): void {
@@ -893,11 +882,18 @@ export class DuckDBControl implements IControl {
     // the map is tiny, and overflow-y: auto then scrolls the content.
     const available = Math.max(160, mapRect.height - anchorOffset - edgeMargin);
     this.panel.style.maxHeight = `min(80vh, 720px, ${available}px)`;
+    const availableWidth = Math.max(PANEL_MIN_WIDTH, mapRect.width - 2 * edgeMargin);
+    this.panel.style.maxWidth = `${availableWidth}px`;
 
-    // Keep the resize handle on the (possibly changed) inward corner, and
-    // re-assert a user-chosen size against the new anchor / map bounds.
-    this.placeResizeHandle?.();
-    this.applyUserPanelSize();
+    // Reapply a resize the user made, clamped to the current map size, so
+    // repositioning keeps their chosen dimensions instead of snapping back.
+    // The lower bound guards a tiny map where the available room goes negative.
+    if (this.userWidth !== null) {
+      this.panel.style.width = `${Math.max(PANEL_MIN_WIDTH, Math.min(this.userWidth, availableWidth))}px`;
+    }
+    if (this.userHeight !== null) {
+      this.panel.style.height = `${Math.max(PANEL_MIN_HEIGHT, Math.min(this.userHeight, available))}px`;
+    }
   }
 
   private renderContent(): void {
