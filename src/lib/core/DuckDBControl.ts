@@ -1,4 +1,6 @@
-import maplibregl, { type IControl, type Map as MapLibreMap } from 'maplibre-gl';
+// Named import, not a default one: MapLibre v6 is ESM-only and dropped its
+// default export. `Popup` is a class, so it serves as both value and type.
+import { Popup, type IControl, type Map as MapLibreMap } from 'maplibre-gl';
 import type { GeoArrowResult } from '@walkthru-earth/objex-utils';
 import {
   attachDatabase,
@@ -86,7 +88,7 @@ export class DuckDBControl implements IControl {
   private panel?: HTMLElement;
   private content?: HTMLElement;
   private renderer?: DuckDBRenderer;
-  private popup: maplibregl.Popup | null = null;
+  private popup: Popup | null = null;
   private options: Required<
     Omit<
       DuckDBControlOptions,
@@ -601,7 +603,7 @@ export class DuckDBControl implements IControl {
       .map(([key, value]) => `<tr><th>${this.escapeHtml(key)}</th><td>${this.escapeHtml(String(value ?? ''))}</td></tr>`)
       .join('');
     this.popup?.remove();
-    this.popup = new maplibregl.Popup({
+    this.popup = new Popup({
       className: 'duckdb-attribute-popup',
       closeButton: true,
       closeOnClick: false,
